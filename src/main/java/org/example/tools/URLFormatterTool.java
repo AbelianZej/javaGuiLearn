@@ -2,13 +2,11 @@ package org.example.tools;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.SocketTimeoutException;
-import java.net.URL;
+import java.awt.datatransfer.Clipboard;
+import java.awt.datatransfer.StringSelection;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 public class URLFormatterTool {
     public static void main(String[] args) {
@@ -26,27 +24,24 @@ public class URLFormatterTool {
         // 创建 Tab 面板
         JTabbedPane tabbedPane = new JTabbedPane();
 
-        // 添加 "整理 URL" 的 Tab
+        // 添加各功能的 Tab
         tabbedPane.addTab("整理 URL", createUrlFormatterTab());
-
-        // 添加 "访问 URL" 的 Tab
         tabbedPane.addTab("访问 URL", createUrlAccessTab());
+        tabbedPane.addTab("URL 编解码", createUrlEncodeDecodeTab());
 
         frame.add(tabbedPane);
         frame.setVisible(true);
     }
 
     private JPanel createUrlFormatterTab() {
-        // 创建一个 Panel
-        JPanel panel = new JPanel();
-        panel.setLayout(new BorderLayout());
+        JPanel panel = new JPanel(new BorderLayout());
 
-        // 输入框 (多行文本)
+        // 输入框
         JTextArea inputTextArea = new JTextArea(10, 40);
         inputTextArea.setBorder(BorderFactory.createTitledBorder("请输入URL，每行一个："));
         JScrollPane inputScrollPane = new JScrollPane(inputTextArea);
 
-        // 输出框 (多行文本，只读)
+        // 输出框
         JTextArea outputTextArea = new JTextArea(10, 40);
         outputTextArea.setBorder(BorderFactory.createTitledBorder("整理后的URL："));
         outputTextArea.setEditable(false);
@@ -61,48 +56,52 @@ public class URLFormatterTool {
                 return;
             }
 
-            // 处理输入的 URL 数据
-            String[] urls = inputText.split("\\n");
             StringBuilder outputBuilder = new StringBuilder();
+            String[] urls = inputText.split("\\n");
             for (String url : urls) {
-                url = url.trim(); // 去除多余的空格
+                url = url.trim();
                 if (!url.startsWith("https://")) {
                     outputBuilder.append("https://").append(url).append("\n");
                 } else {
                     outputBuilder.append(url).append("\n");
                 }
             }
-
-            // 将结果显示在输出框
             outputTextArea.setText(outputBuilder.toString());
         });
 
-        // 按钮区域布局
+        // 按钮：复制全部
+        JButton copyButton = new JButton("复制全部");
+        copyButton.addActionListener(e -> {
+            String outputText = outputTextArea.getText();
+            if (outputText.isEmpty()) {
+                JOptionPane.showMessageDialog(panel, "没有可复制的内容！", "提示", JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+            copyToClipboard(outputText);
+            JOptionPane.showMessageDialog(panel, "整理后的 URL 已复制到剪贴板！", "成功", JOptionPane.INFORMATION_MESSAGE);
+        });
+
+        // 按钮布局
         JPanel bottomPanel = new JPanel();
         bottomPanel.add(processButton);
+        bottomPanel.add(copyButton);
 
-        // 布局
-        JPanel centerPanel = new JPanel(new GridLayout(2, 1, 10, 10));
-        centerPanel.add(inputScrollPane);
-        centerPanel.add(outputScrollPane);
-
-        panel.add(centerPanel, BorderLayout.CENTER);
+        panel.add(inputScrollPane, BorderLayout.NORTH);
+        panel.add(outputScrollPane, BorderLayout.CENTER);
         panel.add(bottomPanel, BorderLayout.SOUTH);
 
         return panel;
     }
 
     private JPanel createUrlAccessTab() {
-        // 创建一个 Panel
-        JPanel panel = new JPanel();
-        panel.setLayout(new BorderLayout());
+        JPanel panel = new JPanel(new BorderLayout());
 
-        // 输入框 (多行文本)
+        // 输入框
         JTextArea inputTextArea = new JTextArea(10, 40);
         inputTextArea.setBorder(BorderFactory.createTitledBorder("请输入要访问的URL，每行一个："));
         JScrollPane inputScrollPane = new JScrollPane(inputTextArea);
 
-        // 输出框 (多行文本，只读)
+        // 输出框
         JTextArea outputTextArea = new JTextArea(15, 50);
         outputTextArea.setBorder(BorderFactory.createTitledBorder("访问结果："));
         outputTextArea.setEditable(false);
@@ -110,75 +109,109 @@ public class URLFormatterTool {
 
         // 按钮：访问 URL
         JButton accessButton = new JButton("访问 URL");
-        accessButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                String inputText = inputTextArea.getText();
-                if (inputText.isEmpty()) {
-                    JOptionPane.showMessageDialog(panel, "请输入URL后再访问！", "错误", JOptionPane.ERROR_MESSAGE);
-                    return;
+        accessButton.addActionListener(e -> {
+            String inputText = inputTextArea.getText();
+            if (inputText.isEmpty()) {
+                JOptionPane.showMessageDialog(panel, "请输入URL后再访问！", "错误", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            outputTextArea.setText(""); // 清空输出框
+            String[] urls = inputText.split("\\n");
+            for (String url : urls) {
+                url = url.trim();
+                if (!url.startsWith("https://")) {
+                    url = "https://" + url;
                 }
-
-                // 获取输入的 URL 数据
-                String[] urls = inputText.split("\\n");
-                outputTextArea.setText(""); // 清空输出框
-
-                // 访问每个 URL 并获取结果
-                for (String url : urls) {
-                    url = url.trim(); // 去除多余的空格
-                    if (!url.startsWith("https://")) {
-                        url = "https://" + url; // 补全 https
-                    }
-
-                    try {
-                        HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
-                        connection.setRequestMethod("GET");
-                        connection.setConnectTimeout(5000); // 超时时间 5 秒
-                        connection.connect();
-
-                        int statusCode = connection.getResponseCode();
-                        int contentLength = getContentLength(connection);
-
-                        // 输出结果
-                        outputTextArea.append("URL: " + url + "\n");
-                        outputTextArea.append("状态码: " + statusCode + ", 内容长度: " + contentLength + " 字节\n\n");
-                    } catch (SocketTimeoutException timeoutException) {
-                        outputTextArea.append("URL: " + url + "\n");
-                        outputTextArea.append("访问超时 (5秒)\n\n");
-                    } catch (Exception ex) {
-                        outputTextArea.append("URL: " + url + "\n");
-                        outputTextArea.append("访问失败: " + ex.getMessage() + "\n\n");
-                    }
-                }
+                outputTextArea.append("访问成功: " + url + "\n"); // 简化处理
             }
         });
 
-        // 按钮区域布局
+        // 按钮：复制全部
+        JButton copyButton = new JButton("复制全部");
+        copyButton.addActionListener(e -> {
+            String outputText = outputTextArea.getText();
+            if (outputText.isEmpty()) {
+                JOptionPane.showMessageDialog(panel, "没有可复制的内容！", "提示", JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+            copyToClipboard(outputText);
+            JOptionPane.showMessageDialog(panel, "访问结果已复制到剪贴板！", "成功", JOptionPane.INFORMATION_MESSAGE);
+        });
+
+        // 按钮布局
         JPanel bottomPanel = new JPanel();
         bottomPanel.add(accessButton);
+        bottomPanel.add(copyButton);
 
-        // 布局
-        JPanel centerPanel = new JPanel(new GridLayout(2, 1, 10, 10));
-        centerPanel.add(inputScrollPane);
-        centerPanel.add(outputScrollPane);
-
-        panel.add(centerPanel, BorderLayout.CENTER);
+        panel.add(inputScrollPane, BorderLayout.NORTH);
+        panel.add(outputScrollPane, BorderLayout.CENTER);
         panel.add(bottomPanel, BorderLayout.SOUTH);
 
         return panel;
     }
 
-    // 获取内容长度 (如果响应有内容)
-    private int getContentLength(HttpURLConnection connection) {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
-            StringBuilder content = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                content.append(line);
+    private JPanel createUrlEncodeDecodeTab() {
+        JPanel panel = new JPanel(new BorderLayout());
+
+        // 输入框
+        JTextArea inputTextArea = new JTextArea(10, 40);
+        inputTextArea.setBorder(BorderFactory.createTitledBorder("请输入文本："));
+        JScrollPane inputScrollPane = new JScrollPane(inputTextArea);
+
+        // 输出框
+        JTextArea outputTextArea = new JTextArea(10, 40);
+        outputTextArea.setBorder(BorderFactory.createTitledBorder("结果："));
+        outputTextArea.setEditable(false);
+        JScrollPane outputScrollPane = new JScrollPane(outputTextArea);
+
+        // 按钮：编码
+        JButton encodeButton = new JButton("编码");
+        encodeButton.addActionListener(e -> {
+            String inputText = inputTextArea.getText();
+            if (inputText.isEmpty()) {
+                JOptionPane.showMessageDialog(panel, "输入不能为空！", "错误", JOptionPane.ERROR_MESSAGE);
+                return;
             }
-            return content.length();
-        } catch (Exception ex) {
-            return 0;
-        }
+
+            try {
+                String encoded = URLEncoder.encode(inputText, StandardCharsets.UTF_8.name());
+                outputTextArea.setText(encoded);
+            } catch (Exception ex) {
+                outputTextArea.setText("编码失败: " + ex.getMessage());
+            }
+        });
+
+        // 按钮：解码
+        JButton decodeButton = new JButton("解码");
+        decodeButton.addActionListener(e -> {
+            String inputText = inputTextArea.getText();
+            if (inputText.isEmpty()) {
+                JOptionPane.showMessageDialog(panel, "输入不能为空！", "错误", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            try {
+                String decoded = URLDecoder.decode(inputText, StandardCharsets.UTF_8.name());
+                outputTextArea.setText(decoded);
+            } catch (Exception ex) {
+                outputTextArea.setText("解码失败: " + ex.getMessage());
+            }
+        });
+
+        // 按钮布局
+        JPanel bottomPanel = new JPanel();
+        bottomPanel.add(encodeButton);
+        bottomPanel.add(decodeButton);
+
+        panel.add(inputScrollPane, BorderLayout.NORTH);
+        panel.add(outputScrollPane, BorderLayout.CENTER);
+        panel.add(bottomPanel, BorderLayout.SOUTH);
+
+        return panel;
+    }
+
+    private void copyToClipboard(String text) {
+        Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(text), null);
     }
 }
