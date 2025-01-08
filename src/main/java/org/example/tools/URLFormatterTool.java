@@ -4,9 +4,8 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
-import java.net.URLDecoder;
-import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 
 public class URLFormatterTool {
     public static void main(String[] args) {
@@ -28,6 +27,7 @@ public class URLFormatterTool {
         tabbedPane.addTab("整理 URL", createUrlFormatterTab());
         tabbedPane.addTab("访问 URL", createUrlAccessTab());
         tabbedPane.addTab("URL 编解码", createUrlEncodeDecodeTab());
+        tabbedPane.addTab("Base64 编解码", createBase64EncodeDecodeTab());
 
         frame.add(tabbedPane);
         frame.setVisible(true);
@@ -166,7 +166,7 @@ public class URLFormatterTool {
         JScrollPane outputScrollPane = new JScrollPane(outputTextArea);
 
         // 按钮：编码
-        JButton encodeButton = new JButton("编码");
+        JButton encodeButton = new JButton("URL 编码");
         encodeButton.addActionListener(e -> {
             String inputText = inputTextArea.getText();
             if (inputText.isEmpty()) {
@@ -175,7 +175,7 @@ public class URLFormatterTool {
             }
 
             try {
-                String encoded = URLEncoder.encode(inputText, StandardCharsets.UTF_8.name());
+                String encoded = java.net.URLEncoder.encode(inputText, StandardCharsets.UTF_8.name());
                 outputTextArea.setText(encoded);
             } catch (Exception ex) {
                 outputTextArea.setText("编码失败: " + ex.getMessage());
@@ -183,7 +183,7 @@ public class URLFormatterTool {
         });
 
         // 按钮：解码
-        JButton decodeButton = new JButton("解码");
+        JButton decodeButton = new JButton("URL 解码");
         decodeButton.addActionListener(e -> {
             String inputText = inputTextArea.getText();
             if (inputText.isEmpty()) {
@@ -192,7 +192,64 @@ public class URLFormatterTool {
             }
 
             try {
-                String decoded = URLDecoder.decode(inputText, StandardCharsets.UTF_8.name());
+                String decoded = java.net.URLDecoder.decode(inputText, StandardCharsets.UTF_8.name());
+                outputTextArea.setText(decoded);
+            } catch (Exception ex) {
+                outputTextArea.setText("解码失败: " + ex.getMessage());
+            }
+        });
+
+        // 按钮布局
+        JPanel bottomPanel = new JPanel();
+        bottomPanel.add(encodeButton);
+        bottomPanel.add(decodeButton);
+
+        panel.add(inputScrollPane, BorderLayout.NORTH);
+        panel.add(outputScrollPane, BorderLayout.CENTER);
+        panel.add(bottomPanel, BorderLayout.SOUTH);
+
+        return panel;
+    }
+
+    private JPanel createBase64EncodeDecodeTab() {
+        JPanel panel = new JPanel(new BorderLayout());
+
+        // 输入框
+        JTextArea inputTextArea = new JTextArea(10, 40);
+        inputTextArea.setBorder(BorderFactory.createTitledBorder("请输入文本："));
+        JScrollPane inputScrollPane = new JScrollPane(inputTextArea);
+
+        // 输出框
+        JTextArea outputTextArea = new JTextArea(10, 40);
+        outputTextArea.setBorder(BorderFactory.createTitledBorder("结果："));
+        outputTextArea.setEditable(false);
+        JScrollPane outputScrollPane = new JScrollPane(outputTextArea);
+
+        // 按钮：Base64 编码
+        JButton encodeButton = new JButton("Base64 编码");
+        encodeButton.addActionListener(e -> {
+            String inputText = inputTextArea.getText();
+            if (inputText.isEmpty()) {
+                JOptionPane.showMessageDialog(panel, "输入不能为空！", "错误", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            String encoded = Base64.getEncoder().encodeToString(inputText.getBytes(StandardCharsets.UTF_8));
+            outputTextArea.setText(encoded);
+        });
+
+        // 按钮：Base64 解码
+        JButton decodeButton = new JButton("Base64 解码");
+        decodeButton.addActionListener(e -> {
+            String inputText = inputTextArea.getText();
+            if (inputText.isEmpty()) {
+                JOptionPane.showMessageDialog(panel, "输入不能为空！", "错误", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            try {
+                byte[] decodedBytes = Base64.getDecoder().decode(inputText);
+                String decoded = new String(decodedBytes, StandardCharsets.UTF_8);
                 outputTextArea.setText(decoded);
             } catch (Exception ex) {
                 outputTextArea.setText("解码失败: " + ex.getMessage());
